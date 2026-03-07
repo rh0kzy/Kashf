@@ -1,0 +1,27 @@
+{
+  "name": "kashf",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+
+  "scripts": {
+  "client": "cd frontend && npm run dev",
+  "server": "cd backend && nodemon index.js",
+  "dev": "concurrently \"npm run client\" \"npm run server\""
+},
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rh0kzy/Kashf.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/rh0kzy/Kashf/issues"
+  },
+  "homepage": "https://github.com/rh0kzy/Kashf#readme",
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}
