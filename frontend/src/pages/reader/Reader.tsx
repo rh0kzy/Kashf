@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { analyzeQuery } from '../../services/api'
 import ErrorMessage from '../../components/shared/ErrorMessage'
+import { useLang } from '../../store/LanguageContext'
 
 interface Article {
   source: string
@@ -22,112 +23,237 @@ interface Article {
   }
 }
 
-const BiasBar = ({ score }: { score: number }) => {
+const BiasBar = ({ score, left, center, right }: { score: number; left: string; center: string; right: string }) => {
   const getColor = (score: number) => {
-    if (score < 30) return 'bg-blue-500'
-    if (score < 45) return 'bg-blue-300'
-    if (score < 55) return 'bg-gray-400'
-    if (score < 70) return 'bg-red-300'
-    return 'bg-red-500'
+    if (score < 30) return '#3b82f6'
+    if (score < 45) return '#93c5fd'
+    if (score < 55) return '#888'
+    if (score < 70) return '#fca5a5'
+    return '#ef4444'
   }
 
   return (
-    <div className="w-full">
-      <div className="flex justify-between text-xs text-gray-500 mb-1">
-        <span>Left</span>
-        <span>Center</span>
-        <span>Right</span>
+    <div style={{ width: '100%' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+        {[left, center, right].map(label => (
+          <span key={label} style={{ fontFamily: 'var(--font-mono)', fontSize: '0.55rem', color: '#333', letterSpacing: '0.08em' }}>
+            {label}
+          </span>
+        ))}
       </div>
-      <div className="w-full h-2 bg-gray-700 rounded-full relative">
+      <div style={{ width: '100%', height: '2px', background: '#1a1a1a', borderRadius: '1px', position: 'relative' }}>
         <div
-          className={`absolute top-0 h-2 w-2 rounded-full ${getColor(score)} -translate-x-1/2`}
-          style={{ left: `${score}%` }}
+          style={{
+            position: 'absolute',
+            top: '-3px',
+            left: `${score}%`,
+            width: '8px',
+            height: '8px',
+            borderRadius: '50%',
+            background: getColor(score),
+            transform: 'translateX(-50%)',
+            boxShadow: `0 0 6px ${getColor(score)}`,
+          }}
         />
       </div>
     </div>
   )
 }
 
-const ArticleCard = ({ article }: { article: Article }) => {
+const ToneTag = ({ tone }: { tone: string }) => {
+  const colors: Record<string, string> = {
+    Positive: '#22c55e',
+    Neutral: '#888',
+    Negative: '#ef4444',
+    Alarming: '#ef4444',
+    Sympathetic: '#3b82f6',
+    Critical: '#f97316',
+  }
+  const color = colors[tone] || '#555'
+  return (
+    <span style={{
+      fontFamily: 'var(--font-mono)',
+      fontSize: '0.55rem',
+      color,
+      border: `1px solid ${color}33`,
+      padding: '2px 6px',
+      borderRadius: '3px',
+      letterSpacing: '0.08em',
+    }}>
+      {tone.toUpperCase()}
+    </span>
+  )
+}
+
+const ArticleCard = ({ article, index }: { article: Article; index: number }) => {
   const [expanded, setExpanded] = useState(false)
+  const { t } = useLang()
 
   return (
-    <div className="border border-gray-800 rounded-lg overflow-hidden flex flex-col">
+    <div style={{
+      border: '1px solid #161616',
+      borderRadius: '8px',
+      background: '#090909',
+      overflow: 'hidden',
+      display: 'flex',
+      flexDirection: 'column',
+      transition: 'border-color 0.2s',
+    }}
+      onMouseEnter={e => (e.currentTarget.style.borderColor = '#2a2a2a')}
+      onMouseLeave={e => (e.currentTarget.style.borderColor = '#161616')}
+    >
       {article.image && (
-        <img src={article.image} alt="" className="w-full h-40 object-cover" />
-      )}
-      <div className="p-4 flex flex-col gap-3 flex-1">
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-bold uppercase tracking-widest text-gray-400">
-            {article.source}
+        <div style={{ position: 'relative', height: '140px', overflow: 'hidden' }}>
+          <img src={article.image} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.7 }} />
+          <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, transparent, #090909)' }} />
+          <span style={{
+            position: 'absolute',
+            top: '10px',
+            left: '10px',
+            fontFamily: 'var(--font-mono)',
+            fontSize: '0.55rem',
+            color: '#ef4444',
+            letterSpacing: '0.1em',
+            background: '#090909cc',
+            padding: '2px 6px',
+            borderRadius: '3px',
+          }}>
+            #{String(index + 1).padStart(2, '0')}
           </span>
-          {article.analysis && (
-            <span className="text-xs px-2 py-1 rounded-full bg-gray-800 text-gray-300">
-              {article.analysis.bias}
-            </span>
-          )}
+        </div>
+      )}
+
+      <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px', flex: 1 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: '0.6rem',
+            color: '#ef4444',
+            letterSpacing: '0.1em',
+          }}>
+            {article.source.toUpperCase()}
+          </span>
+          {article.analysis && <ToneTag tone={article.analysis.tone} />}
         </div>
 
-        <h3 className="text-sm font-semibold leading-snug">{article.title}</h3>
+        <h3 style={{
+          fontFamily: 'var(--font-body)',
+          fontSize: '0.85rem',
+          color: '#ccc',
+          lineHeight: 1.5,
+          margin: 0,
+        }}>
+          {article.title}
+        </h3>
 
-        {article.analysis ? (
+        {article.analysis && (
           <>
-            <p className="text-xs text-gray-400 leading-relaxed">
+            <p style={{
+              fontFamily: 'var(--font-body)',
+              fontSize: '0.75rem',
+              color: '#444',
+              lineHeight: 1.6,
+              margin: 0,
+            }}>
               {article.analysis.summary}
             </p>
 
-            <BiasBar score={article.analysis.biasScore} />
+            <BiasBar
+              score={article.analysis.biasScore}
+              left={t.reader.left}
+              center={t.reader.center}
+              right={t.reader.right}
+            />
 
-            <div className="flex gap-2 flex-wrap">
+            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
               {article.analysis.tags.map(tag => (
-                <span key={tag} className="text-xs px-2 py-0.5 bg-gray-800 rounded-full text-gray-300">
+                <span key={tag} style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: '0.55rem',
+                  color: '#333',
+                  border: '1px solid #1a1a1a',
+                  padding: '2px 6px',
+                  borderRadius: '3px',
+                  letterSpacing: '0.06em',
+                }}>
                   {tag}
                 </span>
               ))}
             </div>
 
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <div className="bg-gray-900 rounded p-2">
-                <div className="text-gray-500 mb-1">Tone</div>
-                <div className="text-white">{article.analysis.tone}</div>
-              </div>
-              <div className="bg-gray-900 rounded p-2">
-                <div className="text-gray-500 mb-1">Opinion %</div>
-                <div className="text-white">{article.analysis.opinionVsFact}%</div>
-              </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+              {[
+                { label: t.reader.bias, value: article.analysis.bias },
+                { label: t.reader.opinion, value: `${article.analysis.opinionVsFact}%` },
+              ].map(item => (
+                <div key={item.label} style={{
+                  background: '#0e0e0e',
+                  borderRadius: '4px',
+                  padding: '8px',
+                  border: '1px solid #161616',
+                }}>
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.55rem', color: '#333', marginBottom: '4px', letterSpacing: '0.08em' }}>
+                    {item.label.toUpperCase()}
+                  </div>
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: '#888' }}>
+                    {item.value}
+                  </div>
+                </div>
+              ))}
             </div>
 
             {expanded && (
-              <div className="text-xs text-gray-400 border-t border-gray-800 pt-3">
-                <div className="mb-2">
-                  <span className="text-gray-500">Framing: </span>
+              <div style={{ borderTop: '1px solid #161616', paddingTop: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', color: '#444' }}>
+                  <span style={{ color: '#333', marginRight: '6px' }}>{t.reader.framing.toUpperCase()}:</span>
                   {article.analysis.framing}
                 </div>
-                <div>
-                  <span className="text-gray-500">Key verbs: </span>
-                  {article.analysis.keyVerbs.join(', ')}
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', color: '#444' }}>
+                  <span style={{ color: '#333', marginRight: '6px' }}>{t.reader.keyVerbs.toUpperCase()}:</span>
+                  {article.analysis.keyVerbs.join(' · ')}
                 </div>
               </div>
             )}
 
             <button
               onClick={() => setExpanded(!expanded)}
-              className="text-xs text-gray-500 hover:text-white transition-colors text-left"
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: '0.6rem',
+                color: '#2a2a2a',
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                textAlign: 'left',
+                padding: 0,
+                letterSpacing: '0.08em',
+                transition: 'color 0.15s',
+              }}
+              onMouseEnter={e => (e.currentTarget.style.color = '#ef4444')}
+              onMouseLeave={e => (e.currentTarget.style.color = '#2a2a2a')}
             >
-              {expanded ? 'Show less ↑' : 'Show more ↓'}
+              {expanded ? '[ COLLAPSE ]' : '[ EXPAND ANALYSIS ]'}
             </button>
           </>
-        ) : (
-          <p className="text-xs text-gray-400 leading-relaxed">{article.summary}</p>
         )}
 
         <a
           href={article.url}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-xs text-gray-500 hover:text-white transition-colors mt-auto"
+          style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: '0.6rem',
+            color: '#2a2a2a',
+            textDecoration: 'none',
+            marginTop: 'auto',
+            letterSpacing: '0.08em',
+            transition: 'color 0.15s',
+          }}
+          onMouseEnter={e => (e.currentTarget.style.color = '#fff')}
+          onMouseLeave={e => (e.currentTarget.style.color = '#2a2a2a')}
         >
-          Read original article
+          {t.reader.readMore} ↗
         </a>
       </div>
     </div>
@@ -140,6 +266,7 @@ const Reader = () => {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [searched, setSearched] = useState(false)
+  const { t } = useLang()
 
   const handleSearch = async () => {
     if (!query.trim()) return
@@ -150,60 +277,152 @@ const Reader = () => {
     try {
       const res = await analyzeQuery(query)
       setArticles(res.data.articles)
-    } catch (err) {
-      setError('Failed to fetch articles. Please try again.')
+    } catch (err: any) {
+      setError(err?.response?.data?.error || 'Failed to fetch articles.')
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-6 py-10">
-      <div className="mb-10">
-        <h1 className="text-4xl font-bold tracking-tight mb-2">Side-by-Side Reader</h1>
-        <p className="text-gray-400">Search any topic and see how different outlets frame the same story.</p>
+    <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '40px 24px' }}>
+      {/* Header */}
+      <div style={{ marginBottom: '32px' }}>
+        <div style={{
+          fontFamily: 'var(--font-mono)',
+          fontSize: '0.6rem',
+          color: '#ef4444',
+          letterSpacing: '0.15em',
+          marginBottom: '8px',
+        }}>
+          // {t.reader.title.toUpperCase()}
+        </div>
+        <h1 style={{
+          fontFamily: 'var(--font-display)',
+          fontSize: '2.5rem',
+          fontWeight: 700,
+          color: '#fff',
+          letterSpacing: '0.05em',
+          margin: '0 0 8px 0',
+        }}>
+          {t.reader.title}
+        </h1>
+        <p style={{
+          fontFamily: 'var(--font-body)',
+          fontSize: '0.85rem',
+          color: '#444',
+          margin: 0,
+        }}>
+          {t.reader.subtitle}
+        </p>
       </div>
 
-      <div className="flex gap-3 mb-10">
-        <input
-          type="text"
-          value={query}
-          onChange={e => setQuery(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && handleSearch()}
-          placeholder="e.g. Gaza, Ukraine, Climate Change..."
-          className="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-gray-400 transition-colors"
-        />
+      {/* Search */}
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '40px' }}>
+        <div style={{ flex: 1, position: 'relative' }}>
+          <span style={{
+            position: 'absolute',
+            left: '14px',
+            top: '50%',
+            transform: 'translateY(-50%)',
+            fontFamily: 'var(--font-mono)',
+            fontSize: '0.7rem',
+            color: '#333',
+          }}>
+            &gt;_
+          </span>
+          <input
+            type="text"
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleSearch()}
+            placeholder={t.reader.placeholder}
+            style={{
+              width: '100%',
+              background: '#0a0a0a',
+              border: '1px solid #1a1a1a',
+              borderRadius: '6px',
+              padding: '12px 16px 12px 40px',
+              color: '#fff',
+              fontFamily: 'var(--font-mono)',
+              fontSize: '0.8rem',
+              outline: 'none',
+              transition: 'border-color 0.15s',
+            }}
+            onFocus={e => (e.target.style.borderColor = '#2a2a2a')}
+            onBlur={e => (e.target.style.borderColor = '#1a1a1a')}
+          />
+        </div>
         <button
           onClick={handleSearch}
           disabled={loading}
-          className="px-6 py-3 bg-white text-black font-semibold rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
+          style={{
+            padding: '12px 24px',
+            background: loading ? '#111' : '#ef4444',
+            border: 'none',
+            borderRadius: '6px',
+            color: '#fff',
+            fontFamily: 'var(--font-display)',
+            fontSize: '0.9rem',
+            fontWeight: 600,
+            letterSpacing: '0.08em',
+            cursor: loading ? 'not-allowed' : 'pointer',
+            opacity: loading ? 0.5 : 1,
+            transition: 'all 0.15s',
+          }}
         >
-          {loading ? 'Analyzing...' : 'Analyze'}
+          {loading ? t.reader.analyzing : t.reader.analyze}
         </button>
       </div>
 
-      {error && <ErrorMessage message={error} onRetry={handleSearch} />}
+      {error && <div style={{ marginBottom: '24px' }}><ErrorMessage message={error} onRetry={handleSearch} /></div>}
 
       {loading && (
-        <div className="text-center py-20 text-gray-400">
-          <div className="text-4xl mb-4">⚙️</div>
-          <p>Fetching articles and running AI analysis...</p>
-          <p className="text-sm text-gray-600 mt-2">This may take 15-30 seconds</p>
+        <div style={{ textAlign: 'center', padding: '80px 0' }}>
+          <div style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: '0.7rem',
+            color: '#ef4444',
+            letterSpacing: '0.15em',
+            marginBottom: '16px',
+            animation: 'pulse 1.5s infinite',
+          }}>
+            ◆ FETCHING AND ANALYZING SOURCES...
+          </div>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.6rem', color: '#222', letterSpacing: '0.1em' }}>
+            THIS MAY TAKE 15-30 SECONDS
+          </div>
         </div>
       )}
 
       {!loading && searched && articles.length === 0 && !error && (
-        <div className="text-center py-20 text-gray-500">No articles found. Try a different query.</div>
+        <div style={{ textAlign: 'center', padding: '80px 0', fontFamily: 'var(--font-mono)', fontSize: '0.7rem', color: '#222', letterSpacing: '0.1em' }}>
+          NO SIGNALS FOUND — TRY A DIFFERENT QUERY
+        </div>
       )}
 
       {!loading && articles.length > 0 && (
         <>
-          <div className="text-sm text-gray-500 mb-6">
-            {articles.length} articles analyzed for <span className="text-white">"{query}"</span>
+          <div style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: '0.6rem',
+            color: '#333',
+            letterSpacing: '0.1em',
+            marginBottom: '20px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+          }}>
+            <span style={{ color: '#22c55e' }}>◆</span>
+            {articles.length} {t.reader.results} "{query}"
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+            gap: '12px',
+          }}>
             {articles.map((article, i) => (
-              <ArticleCard key={i} article={article} />
+              <ArticleCard key={i} article={article} index={i} />
             ))}
           </div>
         </>
