@@ -25,4 +25,7 @@ export const checkArticle = (data: object) =>
 export const extractAndCheck = (data: { url: string }) =>
   api.post('/api/factcheck/extract', data)
 
+export const getIntelFeed = (category?: string) =>
+  api.get(`/api/intel/feed${category ? `?category=${category}` : ''}`)
+
 export default api
