@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { checkArticle } from '../../services/api'
+import { checkArticle, extractAndCheck } from '../../services/api'
 import ErrorMessage from '../../components/shared/ErrorMessage'
 
 interface DetectorResult {
@@ -43,6 +43,8 @@ const VerdictBadge = ({ verdict }: { verdict: string }) => {
 }
 
 const Detector = () => {
+  const [mode, setMode] = useState<'paste' | 'url'>('paste')
+  const [url, setUrl] = useState('')
   const [title, setTitle] = useState('')
   const [source, setSource] = useState('')
   const [content, setContent] = useState('')
@@ -51,16 +53,23 @@ const Detector = () => {
   const [error, setError] = useState('')
 
   const handleCheck = async () => {
-    if (!content.trim()) return
+    if (mode === 'url' && !url.trim()) return
+    if (mode === 'paste' && !content.trim()) return
+
     setLoading(true)
     setError('')
     setResult(null)
 
     try {
-      const res = await checkArticle({ title, source, content })
+      let res
+      if (mode === 'url') {
+        res = await extractAndCheck({ url })
+      } else {
+        res = await checkArticle({ title, source, content })
+      }
       setResult(res.data)
-    } catch (err) {
-      setError('Failed to analyze article. Please try again.')
+    } catch (err: any) {
+      setError(err?.response?.data?.error || 'Failed to analyze article. Please try again.')
     } finally {
       setLoading(false)
     }
@@ -70,36 +79,69 @@ const Detector = () => {
     <div className="max-w-4xl mx-auto px-6 py-10">
       <div className="mb-10">
         <h1 className="text-4xl font-bold tracking-tight mb-2">Fake News Detector</h1>
-        <p className="text-gray-400">Paste an article to get a credibility score, bias analysis, and fact-check breakdown.</p>
+        <p className="text-gray-400">Analyze any article for credibility, bias and manipulation.</p>
+      </div>
+
+      {/* Mode tabs */}
+      <div className="flex gap-2 mb-6">
+        <button
+          onClick={() => setMode('paste')}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+            mode === 'paste' ? 'bg-white text-black' : 'bg-gray-900 text-gray-400 hover:text-white'
+          }`}
+        >
+          Paste Text
+        </button>
+        <button
+          onClick={() => setMode('url')}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+            mode === 'url' ? 'bg-white text-black' : 'bg-gray-900 text-gray-400 hover:text-white'
+          }`}
+        >
+          From URL
+        </button>
       </div>
 
       <div className="flex flex-col gap-4 mb-8">
-        <div className="grid grid-cols-2 gap-4">
+        {mode === 'url' ? (
           <input
             type="text"
-            value={title}
-            onChange={e => setTitle(e.target.value)}
-            placeholder="Article title (optional)"
+            value={url}
+            onChange={e => setUrl(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleCheck()}
+            placeholder="https://example.com/article"
             className="bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-gray-400 transition-colors"
           />
-          <input
-            type="text"
-            value={source}
-            onChange={e => setSource(e.target.value)}
-            placeholder="Source / outlet name (optional)"
-            className="bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-gray-400 transition-colors"
-          />
-        </div>
-        <textarea
-          value={content}
-          onChange={e => setContent(e.target.value)}
-          placeholder="Paste the full article content here..."
-          rows={10}
-          className="bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-gray-400 transition-colors resize-none"
-        />
+        ) : (
+          <>
+            <div className="grid grid-cols-2 gap-4">
+              <input
+                type="text"
+                value={title}
+                onChange={e => setTitle(e.target.value)}
+                placeholder="Article title (optional)"
+                className="bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-gray-400 transition-colors"
+              />
+              <input
+                type="text"
+                value={source}
+                onChange={e => setSource(e.target.value)}
+                placeholder="Source / outlet name (optional)"
+                className="bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-gray-400 transition-colors"
+              />
+            </div>
+            <textarea
+              value={content}
+              onChange={e => setContent(e.target.value)}
+              placeholder="Paste the full article content here..."
+              rows={10}
+              className="bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-gray-400 transition-colors resize-none"
+            />
+          </>
+        )}
         <button
           onClick={handleCheck}
-          disabled={loading || !content.trim()}
+          disabled={loading || (mode === 'url' ? !url.trim() : !content.trim())}
           className="px-6 py-3 bg-white text-black font-semibold rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50 self-end"
         >
           {loading ? 'Analyzing...' : 'Check Article'}
@@ -129,26 +171,10 @@ const Detector = () => {
           <div className="border border-gray-800 rounded-lg p-6">
             <h2 className="text-xl font-semibold mb-6">Scores</h2>
             <div className="flex justify-around flex-wrap gap-6">
-              <ScoreRing
-                score={result.mistral.credibilityScore}
-                label="Credibility"
-                color="border-green-500"
-              />
-              <ScoreRing
-                score={result.mistral.manipulationLanguage}
-                label="Manipulation"
-                color="border-red-500"
-              />
-              <ScoreRing
-                score={result.mistral.emotionalLanguage}
-                label="Emotional Language"
-                color="border-yellow-500"
-              />
-              <ScoreRing
-                score={result.mistral.opinionVsFact}
-                label="Opinion vs Fact"
-                color="border-blue-500"
-              />
+              <ScoreRing score={result.mistral.credibilityScore} label="Credibility" color="border-green-500" />
+              <ScoreRing score={result.mistral.manipulationLanguage} label="Manipulation" color="border-red-500" />
+              <ScoreRing score={result.mistral.emotionalLanguage} label="Emotional Language" color="border-yellow-500" />
+              <ScoreRing score={result.mistral.opinionVsFact} label="Opinion vs Fact" color="border-blue-500" />
             </div>
           </div>
 

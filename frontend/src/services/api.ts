@@ -22,4 +22,7 @@ export const getNewsByLocation = (location: string) =>
 export const checkArticle = (data: object) =>
   api.post('/api/factcheck/article', data)
 
+export const extractAndCheck = (data: { url: string }) =>
+  api.post('/api/factcheck/extract', data)
+
 export default api
