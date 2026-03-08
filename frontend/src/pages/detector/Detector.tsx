@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { checkArticle } from '../../services/api'
+import ErrorMessage from '../../components/shared/ErrorMessage'
 
 interface DetectorResult {
   mistral: {
@@ -105,7 +106,7 @@ const Detector = () => {
         </button>
       </div>
 
-      {error && <div className="text-red-400 text-sm mb-6">{error}</div>}
+      {error && <ErrorMessage message={error} onRetry={handleCheck} />}
 
       {loading && (
         <div className="text-center py-20 text-gray-400">

@@ -25,3 +25,17 @@ app.get('/', (req, res) => {
 app.listen(PORT, () => {
   console.log(`Kashf server running on port ${PORT}`);
 });
+
+// Global error handler
+app.use((err, req, res, next) => {
+  console.error('Global error:', err.message)
+  res.status(err.status || 500).json({
+    error: err.message || 'Internal server error',
+    status: err.status || 500,
+  })
+})
+
+// 404 handler
+app.use((req, res) => {
+  res.status(404).json({ error: 'Route not found' })
+})

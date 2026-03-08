@@ -1,7 +1,8 @@
-const axios = require('axios');
-const RSSParser = require('rss-parser');
+const axios = require('axios')
+const RSSParser = require('rss-parser')
+const { apiErrorHandler } = require('../middleware/errorHandler')
 
-const parser = new RSSParser();
+const parser = new RSSParser()
 
 const RSS_FEEDS = {
   aljazeera: 'https://www.aljazeera.com/xml/rss/all.xml',
@@ -9,79 +10,99 @@ const RSS_FEEDS = {
   bbc: 'http://feeds.bbci.co.uk/news/world/rss.xml',
   reuters: 'https://feeds.reuters.com/reuters/worldNews',
   france24: 'https://www.france24.com/en/rss',
-};
+}
 
 const fetchFromNewsAPI = async (query) => {
-  const response = await axios.get('https://newsapi.org/v2/everything', {
-    params: {
-      q: query,
-      language: 'en',
-      sortBy: 'publishedAt',
-      pageSize: 5,
-      apiKey: process.env.NEWSAPI_KEY,
-    },
-  });
-  return response.data.articles.map((a) => ({
-    source: a.source.name,
-    title: a.title,
-    summary: a.description,
-    url: a.url,
-    publishedAt: a.publishedAt,
-    image: a.urlToImage,
-  }));
-};
+  try {
+    const response = await axios.get('https://newsapi.org/v2/everything', {
+      params: {
+        q: query,
+        language: 'en',
+        sortBy: 'publishedAt',
+        pageSize: 5,
+        apiKey: process.env.NEWSAPI_KEY,
+      },
+      timeout: 8000,
+    })
+    return response.data.articles.map((a) => ({
+      source: a.source.name,
+      title: a.title,
+      summary: a.description,
+      url: a.url,
+      publishedAt: a.publishedAt,
+      image: a.urlToImage,
+    }))
+  } catch (error) {
+    apiErrorHandler(error, 'NewsAPI')
+  }
+}
 
 const fetchFromGNews = async (query) => {
-  const response = await axios.get('https://gnews.io/api/v4/search', {
-    params: {
-      q: query,
-      lang: 'en',
-      max: 5,
-      token: process.env.GNEWS_KEY,
-    },
-  });
-  return response.data.articles.map((a) => ({
-    source: a.source.name,
-    title: a.title,
-    summary: a.description,
-    url: a.url,
-    publishedAt: a.publishedAt,
-    image: a.image,
-  }));
-};
+  try {
+    const response = await axios.get('https://gnews.io/api/v4/search', {
+      params: {
+        q: query,
+        lang: 'en',
+        max: 5,
+        token: process.env.GNEWS_KEY,
+      },
+      timeout: 8000,
+    })
+    return response.data.articles.map((a) => ({
+      source: a.source.name,
+      title: a.title,
+      summary: a.description,
+      url: a.url,
+      publishedAt: a.publishedAt,
+      image: a.image,
+    }))
+  } catch (error) {
+    apiErrorHandler(error, 'GNews')
+  }
+}
 
 const fetchFromGuardian = async (query) => {
-  const response = await axios.get('https://content.guardianapis.com/search', {
-    params: {
-      q: query,
-      'show-fields': 'trailText,thumbnail',
-      'page-size': 5,
-      'api-key': process.env.GUARDIAN_API_KEY,
-    },
-  });
-  return response.data.response.results.map((a) => ({
-    source: 'The Guardian',
-    title: a.webTitle,
-    summary: a.fields?.trailText || '',
-    url: a.webUrl,
-    publishedAt: a.webPublicationDate,
-    image: a.fields?.thumbnail || '',
-  }));
-};
+  try {
+    const response = await axios.get('https://content.guardianapis.com/search', {
+      params: {
+        q: query,
+        'show-fields': 'trailText,thumbnail',
+        'page-size': 5,
+        'api-key': process.env.GUARDIAN_API_KEY,
+      },
+      timeout: 8000,
+    })
+    return response.data.response.results.map((a) => ({
+      source: 'The Guardian',
+      title: a.webTitle,
+      summary: a.fields?.trailText || '',
+      url: a.webUrl,
+      publishedAt: a.webPublicationDate,
+      image: a.fields?.thumbnail || '',
+    }))
+  } catch (error) {
+    apiErrorHandler(error, 'Guardian')
+  }
+}
 
 const fetchFromRSS = async (feedName) => {
-  const url = RSS_FEEDS[feedName];
-  if (!url) return [];
-  const feed = await parser.parseURL(url);
-  return feed.items.slice(0, 5).map((item) => ({
-    source: feed.title || feedName,
-    title: item.title,
-    summary: item.contentSnippet || item.content || '',
-    url: item.link,
-    publishedAt: item.pubDate,
-    image: null,
-  }));
-};
+  try {
+    const url = RSS_FEEDS[feedName]
+    if (!url) return []
+    const feed = await parser.parseURL(url)
+    return feed.items.slice(0, 5).map((item) => ({
+      source: feed.title || feedName,
+      title: item.title,
+      summary: item.contentSnippet || item.content || '',
+      url: item.link,
+      publishedAt: item.pubDate,
+      image: null,
+    }))
+  } catch (error) {
+    console.warn(`RSS feed ${feedName} failed:`, error.message)
+    return []
+  }
+}
 
 const fetchAllSources = async (query) => {
   const results = await Promise.allSettled([
@@ -91,7 +112,7 @@ const fetchAllSources = async (query) => {
     fetchFromRSS('bbc'),
     fetchFromRSS('aljazeera'),
     fetchFromRSS('rt'),
-  ]);
+  ])
 
   return {
     newsapi: results[0].status === 'fulfilled' ? results[0].value : [],
@@ -100,8 +121,8 @@ const fetchAllSources = async (query) => {
     bbc: results[3].status === 'fulfilled' ? results[3].value : [],
     aljazeera: results[4].status === 'fulfilled' ? results[4].value : [],
     rt: results[5].status === 'fulfilled' ? results[5].value : [],
-  };
-};
+  }
+}
 
 module.exports = {
   fetchFromNewsAPI,
@@ -109,4 +130,4 @@ module.exports = {
   fetchFromGuardian,
   fetchFromRSS,
   fetchAllSources,
-};
+}

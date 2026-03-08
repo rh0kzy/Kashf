@@ -47,6 +47,7 @@ const ConflictMap = () => {
   const [zoneArticles, setZoneArticles] = useState<Article[]>([])
   const [loadingZone, setLoadingZone] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [mapError, setMapError] = useState('')
 
   useEffect(() => {
     const fetchEvents = async () => {
@@ -54,7 +55,7 @@ const ConflictMap = () => {
         const res = await getConflictEvents()
         setRecentArticles(res.data.articles || [])
       } catch (err) {
-        console.error('Failed to fetch conflict events')
+        setMapError('Failed to load conflict data. GDELT may be rate limiting. Try refreshing in 30 seconds.')
       } finally {
         setLoading(false)
       }
@@ -97,6 +98,11 @@ const ConflictMap = () => {
         {loading && (
           <div className="absolute inset-0 z-10 flex items-center justify-center bg-gray-950/80">
             <p className="text-gray-400">Loading conflict data...</p>
+          </div>
+        )}
+        {mapError && (
+          <div className="absolute top-4 left-4 z-10 bg-red-950/90 border border-red-800 rounded-lg p-3 text-red-300 text-xs max-w-xs">
+            {mapError}
           </div>
         )}
         <MapContainer

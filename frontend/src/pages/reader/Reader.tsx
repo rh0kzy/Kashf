@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { analyzeQuery } from '../../services/api'
+import ErrorMessage from '../../components/shared/ErrorMessage'
 
 interface Article {
   source: string
@@ -181,9 +182,7 @@ const Reader = () => {
         </button>
       </div>
 
-      {error && (
-        <div className="text-red-400 text-sm mb-6">{error}</div>
-      )}
+      {error && <ErrorMessage message={error} onRetry={handleSearch} />}
 
       {loading && (
         <div className="text-center py-20 text-gray-400">
