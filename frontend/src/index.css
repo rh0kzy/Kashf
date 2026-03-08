@@ -1,4 +1,11 @@
 @import "tailwindcss";
+
+.leaflet-container {
+  height: 100%;
+  width: 100%;
+  background: #0a0a0f;
+}
+
 :root {
   font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
@@ -25,10 +32,12 @@ a:hover {
 
 body {
   margin: 0;
-  display: flex;
-  place-items: center;
   min-width: 320px;
   min-height: 100vh;
+}
+
+#root {
+  width: 100%;
 }
 
 h1 {
