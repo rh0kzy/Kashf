@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Ion, Viewer, Cartesian3, Color, HeightReference, NearFarScalar, UrlTemplateImageryProvider } from 'cesium'
 import { useLang } from '../../store/LanguageContext'
-import { getConflictEvents, getNewsByLocation, getIntelFeed } from '../../services/api'
+import { getConflictEvents, getNewsByLocation, getIntelFeed, getFlights } from '../../services/api'
 import 'cesium/Widgets/widgets.css'
 
 Ion.defaultAccessToken = import.meta.env.VITE_CESIUM_TOKEN
@@ -52,6 +52,42 @@ const formatDate = (dateStr: string) => {
   return `${dateStr.slice(6, 8)}/${dateStr.slice(4, 6)}/${dateStr.slice(0, 4)}`
 }
 
+const createPlaneIcon = (isMilitary: boolean) => {
+  const canvas = document.createElement('canvas')
+  canvas.width = 32
+  canvas.height = 32
+  const ctx = canvas.getContext('2d')!
+
+  ctx.fillStyle = isMilitary ? '#ef4444' : '#60a5fa'
+  ctx.strokeStyle = isMilitary ? '#ff6666' : '#93c5fd'
+  ctx.lineWidth = 1
+
+  // Draw airplane shape
+  ctx.beginPath()
+  // Body
+  ctx.moveTo(16, 2)
+  ctx.lineTo(18, 14)
+  // Right wing
+  ctx.lineTo(30, 18)
+  ctx.lineTo(28, 20)
+  ctx.lineTo(18, 17)
+  // Right tail
+  ctx.lineTo(20, 28)
+  ctx.lineTo(16, 26)
+  // Left tail
+  ctx.lineTo(12, 28)
+  ctx.lineTo(14, 17)
+  // Left wing
+  ctx.lineTo(4, 20)
+  ctx.lineTo(2, 18)
+  ctx.lineTo(14, 14)
+  ctx.closePath()
+  ctx.fill()
+  ctx.stroke()
+
+  return canvas.toDataURL()
+}
+
 const ConflictMap = () => {
   const { t, lang } = useLang()
   const viewerRef = useRef<Viewer | null>(null)
@@ -68,6 +104,11 @@ const ConflictMap = () => {
   const [intelLoading, setIntelLoading] = useState(false)
   const [intelCategory, setIntelCategory] = useState<'all' | 'breaking' | 'conflict' | 'arabic'>('all')
 
+  const [flights, setFlights] = useState<any[]>([])
+  const [showFlights, setShowFlights] = useState(true)
+  const [flightsLoading, setFlightsLoading] = useState(false)
+  const [selectedFlight, setSelectedFlight] = useState<any>(null)
+
   const fetchIntel = async (category = 'all') => {
     setIntelLoading(true)
     try {
@@ -79,6 +120,25 @@ const ConflictMap = () => {
       setIntelLoading(false)
     }
   }
+
+  const fetchFlights = async () => {
+    setFlightsLoading(true)
+    try {
+      const res = await getFlights()
+      setFlights(res.data.flights || [])
+    } catch {
+      console.warn('Flight fetch failed')
+    } finally {
+      setFlightsLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchFlights()
+    // Refresh every 30 seconds
+    const interval = setInterval(fetchFlights, 30000)
+    return () => clearInterval(interval)
+  }, [])
 
   useEffect(() => {
     if (sidebarTab === 'intel') {
@@ -195,7 +255,11 @@ const ConflictMap = () => {
     const handler = viewer.screenSpaceEventHandler
     handler.setInputAction((click: any) => {
       const picked = viewer.scene.pick(click.position)
-      if (picked?.id?.properties?.zone) {
+      if (picked?.id?.properties?.isFlightEntity?.getValue()) {
+        const flight = picked.id.properties.flight.getValue()
+        // Show flight info in sidebar
+        setSelectedFlight(flight)
+      } else if (picked?.id?.properties?.zone) {
         handleZoneClick(picked.id.properties.zone.getValue())
       }
     }, 1) // LEFT_CLICK = 1
@@ -204,6 +268,59 @@ const ConflictMap = () => {
       handler.removeInputAction(1)
     }
   }, [activeFilter])
+
+  useEffect(() => {
+    const viewer = viewerRef.current
+    if (!viewer) return
+
+    // Remove existing flight entities
+    const toRemove = viewer.entities.values.filter(
+      (e: any) => e.properties?.isFlightEntity?.getValue()
+    )
+    toRemove.forEach(e => viewer.entities.remove(e))
+
+    if (!showFlights) return
+
+    flights.forEach(flight => {
+      if (!flight.latitude || !flight.longitude) return
+
+      const headingRad = (flight.heading * Math.PI) / 180
+
+      viewer.entities.add({
+        position: Cartesian3.fromDegrees(
+          flight.longitude,
+          flight.latitude,
+          (flight.altitude || 1000) + 5000
+        ),
+        billboard: {
+          image: createPlaneIcon(flight.isMilitary),
+          width: flight.isMilitary ? 24 : 18,
+          height: flight.isMilitary ? 24 : 18,
+          rotation: -headingRad,
+          alignedAxis: Cartesian3.UNIT_Z,
+          color: flight.isMilitary
+            ? Color.fromCssColorString('#ef4444')
+            : Color.fromCssColorString('#60a5fa'),
+        },
+        label: {
+          text: flight.callsign,
+          font: '9px JetBrains Mono, monospace',
+          fillColor: flight.isMilitary
+            ? Color.fromCssColorString('#ef4444')
+            : Color.fromCssColorString('#60a5fa'),
+          outlineColor: Color.BLACK,
+          outlineWidth: 2,
+          pixelOffset: { x: 0, y: -18 } as any,
+          scaleByDistance: new NearFarScalar(1.5e5, 1.2, 3.0e6, 0.0),
+          show: true,
+        },
+        properties: {
+          isFlightEntity: true,
+          flight,
+        } as any,
+      })
+    })
+  }, [flights, showFlights])
 
   // Fetch live feed
   useEffect(() => {
@@ -288,6 +405,47 @@ const ConflictMap = () => {
           }}>
             {CONFLICT_ZONES.length} ACTIVE ZONES
           </span>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', pointerEvents: 'all' }}>
+            <button
+              onClick={() => setShowFlights(prev => !prev)}
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: '0.55rem',
+                letterSpacing: '0.08em',
+                padding: '4px 10px',
+                borderRadius: '3px',
+                border: `1px solid ${showFlights ? '#ef444433' : '#1a1a1a'}`,
+                background: showFlights ? '#ef444411' : '#0a0a0a',
+                color: showFlights ? '#ef4444' : '#333',
+                cursor: 'pointer',
+                transition: 'all 0.15s',
+              }}
+            >
+              ✈ {showFlights ? 'FLIGHTS ON' : 'FLIGHTS OFF'}
+            </button>
+            {flightsLoading && (
+              <span style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: '0.5rem',
+                color: '#333',
+                letterSpacing: '0.08em',
+                animation: 'pulse 1.5s infinite',
+              }}>
+                UPDATING...
+              </span>
+            )}
+            {!flightsLoading && flights.length > 0 && (
+              <span style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: '0.5rem',
+                color: '#222',
+                letterSpacing: '0.08em',
+              }}>
+                {flights.length} AIRCRAFT
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Filter bar */}
@@ -488,6 +646,73 @@ const ConflictMap = () => {
           {/* ZONES TAB */}
           {sidebarTab === 'zones' && (
             <>
+              {selectedFlight && (
+                <div style={{
+                  margin: '10px 12px',
+                  border: '1px solid #ef444433',
+                  borderRadius: '6px',
+                  padding: '12px',
+                  background: '#0d0505',
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                    <span style={{
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: '0.65rem',
+                      color: '#ef4444',
+                      letterSpacing: '0.1em',
+                    }}>
+                      ✈ {selectedFlight.callsign}
+                    </span>
+                    <button
+                      onClick={() => setSelectedFlight(null)}
+                      style={{
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: '0.55rem',
+                        color: '#333',
+                        background: 'none',
+                        border: 'none',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
+                    {[
+                      { label: 'ORIGIN', value: selectedFlight.originCountry },
+                      { label: 'ALTITUDE', value: `${Math.round(selectedFlight.altitude)}m` },
+                      { label: 'SPEED', value: `${Math.round(selectedFlight.velocity)} m/s` },
+                      { label: 'HEADING', value: `${Math.round(selectedFlight.heading)}°` },
+                      { label: 'REGION', value: selectedFlight.region },
+                      { label: 'TYPE', value: selectedFlight.isMilitary ? 'MILITARY' : 'CIVILIAN' },
+                    ].map(item => (
+                      <div key={item.label} style={{
+                        background: '#0a0a0a',
+                        borderRadius: '4px',
+                        padding: '6px 8px',
+                        border: '1px solid #161616',
+                      }}>
+                        <div style={{
+                          fontFamily: 'var(--font-mono)',
+                          fontSize: '0.5rem',
+                          color: '#333',
+                          marginBottom: '2px',
+                          letterSpacing: '0.08em',
+                        }}>
+                          {item.label}
+                        </div>
+                        <div style={{
+                          fontFamily: 'var(--font-mono)',
+                          fontSize: '0.65rem',
+                          color: '#888',
+                        }}>
+                          {item.value || 'N/A'}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
               {!selectedZone && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', marginBottom: '8px' }}>
                   {CONFLICT_ZONES.map(zone => (
@@ -602,34 +827,66 @@ const ConflictMap = () => {
               {!intelLoading && intelItems.map((item, i) => (
                 <a key={i} href={item.url} target="_blank" rel="noopener noreferrer"
                   style={{
-                    border: '1px solid #111', borderRadius: '6px', padding: '10px',
-                    background: '#090909', display: 'block', textDecoration: 'none',
+                    border: `1px solid ${item.isTelegram ? '#2a1f4e' : '#111'}`,
+                    borderRadius: '6px',
+                    padding: '10px',
+                    background: item.isTelegram ? '#0d0b1a' : '#090909',
+                    display: 'block',
+                    textDecoration: 'none',
                     transition: 'all 0.15s',
                   }}
-                  onMouseEnter={e => { e.currentTarget.style.borderColor = '#1a1a1a'; e.currentTarget.style.background = '#0e0e0e' }}
-                  onMouseLeave={e => { e.currentTarget.style.borderColor = '#111'; e.currentTarget.style.background = '#090909' }}
+                  onMouseEnter={e => {
+                    e.currentTarget.style.borderColor = item.isTelegram ? '#4a3f8e' : '#1a1a1a'
+                    e.currentTarget.style.background = item.isTelegram ? '#120f22' : '#0e0e0e'
+                  }}
+                  onMouseLeave={e => {
+                    e.currentTarget.style.borderColor = item.isTelegram ? '#2a1f4e' : '#111'
+                    e.currentTarget.style.background = item.isTelegram ? '#0d0b1a' : '#090909'
+                  }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      {item.isTelegram && (
+                        <span style={{
+                          fontFamily: 'var(--font-mono)',
+                          fontSize: '0.5rem',
+                          color: '#7c6fd4',
+                          border: '1px solid #2a1f4e',
+                          padding: '1px 5px',
+                          borderRadius: '2px',
+                          letterSpacing: '0.06em',
+                        }}>
+                          TG
+                        </span>
+                      )}
+                      <span style={{
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: '0.55rem',
+                        color: item.isTelegram ? '#7c6fd4' : '#ef4444',
+                        letterSpacing: '0.08em',
+                      }}>
+                        {item.source.toUpperCase()}
+                      </span>
+                    </div>
                     <span style={{
-                      fontFamily: 'var(--font-mono)', fontSize: '0.55rem',
-                      color: '#ef4444', letterSpacing: '0.08em',
-                    }}>
-                      {item.source.toUpperCase()}
-                    </span>
-                    <span style={{
-                      fontFamily: 'var(--font-mono)', fontSize: '0.5rem',
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: '0.5rem',
                       color: item.category === 'arabic' ? '#3b82f6'
                         : item.category === 'conflict' ? '#ef4444'
                           : '#f97316',
-                      border: `1px solid currentColor`,
-                      padding: '1px 5px', borderRadius: '2px', letterSpacing: '0.06em',
+                      border: '1px solid currentColor',
+                      padding: '1px 5px',
+                      borderRadius: '2px',
+                      letterSpacing: '0.06em',
                     }}>
                       {item.category.toUpperCase()}
                     </span>
                   </div>
                   <p style={{
                     fontFamily: item.lang === 'ar' ? 'Cairo, sans-serif' : 'var(--font-body)',
-                    fontSize: '0.72rem', color: '#777', lineHeight: 1.5,
+                    fontSize: '0.72rem',
+                    color: '#777',
+                    lineHeight: 1.5,
                     margin: '0 0 6px 0',
                     direction: item.lang === 'ar' ? 'rtl' : 'ltr',
                     textAlign: item.lang === 'ar' ? 'right' : 'left',
@@ -637,7 +894,9 @@ const ConflictMap = () => {
                     {item.title}
                   </p>
                   <span style={{
-                    fontFamily: 'var(--font-mono)', fontSize: '0.5rem', color: '#222',
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: '0.5rem',
+                    color: '#222',
                   }}>
                     {item.publishedAt ? new Date(item.publishedAt).toLocaleTimeString() : ''}
                   </span>

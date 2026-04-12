@@ -28,4 +28,7 @@ export const extractAndCheck = (data: { url: string }) =>
 export const getIntelFeed = (category?: string) =>
   api.get(`/api/intel/feed${category ? `?category=${category}` : ''}`)
 
+export const getFlights = () =>
+  api.get('/api/flights')
+
 export default api

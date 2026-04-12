@@ -7,6 +7,7 @@ const analysisRoutes = require('./routes/analysis');
 const conflictRoutes = require('./routes/conflicts');
 const factcheckRoutes = require('./routes/factcheck');
 const intelRoutes = require('./routes/intel');
+const flightRoutes = require('./routes/flights');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -19,6 +20,7 @@ app.use('/api/analysis', analysisRoutes);
 app.use('/api/conflicts', conflictRoutes);
 app.use('/api/factcheck', factcheckRoutes);
 app.use('/api/intel', intelRoutes);
+app.use('/api/flights', flightRoutes);
 
 app.get('/', (req, res) => {
   res.json({ message: 'Kashf API is running' });
